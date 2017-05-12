@@ -48,12 +48,14 @@ Add support for dependency links between tasks using [jsPlumb](https://jsplumbto
     
     default: 
 
-        {
         Endpoint: ['Dot', {radius: 4}],
-        EndpointStyle: {fillStyle:'#456', strokeStyle:'#456', lineWidth: 1},
+        EndpointStyle: {fillStyle: '#456', strokeStyle: '#456', lineWidth: 1},
+        PaintStyle: {
+            strokeWidth: 3,
+            stroke: 'rgb(68, 85, 102)'
+        },
         Connector: 'Flowchart',
-        ConnectionOverlays: [['Arrow', { location:1, length:12, width:12}]]
-        }
+        ConnectionOverlays: [['Arrow', {location: 1, length: 12, width: 12}]]
 
 - ### endpoints
 
@@ -170,3 +172,31 @@ can optionnaly be set to an object that will be used for each related
 - **api.dependencies.on.add(dependency)**, **api.dependencies.on.remove(dependency)**, **api.dependencies.on.change(dependency, oldDependency)**
 
   A dependency was created, removed or changed.
+
+## Tips
+
+- Display dependencies related to a task only
+
+`data-fromId` and `data-toId` attributes are added to svg canvas used to display dependency links.
+
+So it's possible with CSS to hide all dependencies but thoses related to a given task id.
+
+```css
+.jtk-connector {
+    display: none;
+}
+
+.jtk-connector.jtk-dragging {
+    display: inherit;
+}
+
+.jtk-connector[data-fromId='Product list view'] {
+    display: inherit;
+}
+
+.jtk-connector[data-toId='Product list view'] {
+    display: inherit;
+}
+```
+
+For more information, see [Styling via css](https://jsplumbtoolkit.com/community/doc/styling-via-css.html) from [jsPlumb documentation](https://jsplumbtoolkit.com/community/doc/home.html).

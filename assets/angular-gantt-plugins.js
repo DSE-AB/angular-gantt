@@ -1,5 +1,5 @@
 /*
-Project: angular-gantt v1.3.1 - Gantt chart component for AngularJS
+Project: angular-gantt v1.3.2 - Gantt chart component for AngularJS
 Authors: Marco Schweighauser, Rémi Alvergnat
 License: MIT
 Homepage: https://www.angular-gantt.com
@@ -149,6 +149,10 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                             scope.jsPlumbDefaults = {
                                 Endpoint: ['Dot', {radius: 4}],
                                 EndpointStyle: {fillStyle: '#456', strokeStyle: '#456', lineWidth: 1},
+                                PaintStyle: {
+                                    strokeWidth: 3,
+                                    stroke: 'rgb(68, 85, 102)'
+                                },
                                 Connector: 'Flowchart',
                                 ConnectionOverlays: [['Arrow', {location: 1, length: 12, width: 12}]]
                             };
@@ -1330,39 +1334,70 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                     scope.enabled = true;
                 }
 
-                function buildSensor() {
-                    var ganttElement = element.parent().parent().parent()[0].querySelectorAll('div.gantt')[0];
-                    return new ResizeSensor(ganttElement, function() {
+                function buildSensors() {
+                    var ganttElement = ganttCtrl.gantt.$element[0];
+                    var ganttSensor = new ResizeSensor(ganttElement, function() {
                         // See issue #664
+                        var changed = false;
                         if (Math.abs(ganttElement.clientWidth - ganttCtrl.gantt.$scope.ganttElementWidth) > 1) {
                             ganttCtrl.gantt.$scope.ganttElementWidth = ganttElement.clientWidth;
+                            changed = true;
+                        }
+                        if (Math.abs(ganttElement.clientHeight - ganttCtrl.gantt.$scope.ganttElementHeight) > 1) {
+                            ganttCtrl.gantt.$scope.ganttElementHeight = ganttElement.clientHeight;
+                            changed = true;
+                        }
+                        if (changed) {
                             ganttCtrl.gantt.$scope.$apply();
                         }
                     });
+                    var containerSensor = new ResizeSensor(ganttElement.parentElement, function() {
+                        var el = ganttElement.parentElement;
+                        var height = el.offsetHeight;
+
+                        var style = getComputedStyle(el);
+                        height = height - parseInt(style.marginTop) - parseInt(style.marginBottom);
+
+                        ganttCtrl.gantt.$scope.ganttContainerHeight = height;
+
+                        var width = el.offsetWidth;
+
+                        style = getComputedStyle(el);
+                        width = width - parseInt(style.marginLeft) - parseInt(style.marginRight);
+
+                        ganttCtrl.gantt.$scope.ganttContainerWidth = width;
+
+                        ganttCtrl.gantt.$scope.$apply();
+                    });
+                    return [ganttSensor, containerSensor];
                 }
 
                 var rendered = false;
-                var sensor;
+                var sensors = [];
+
+                function detach(sensors) {
+                    for (var i=0; i<sensors; i++) {
+                        sensors[i].detach();
+                    }
+                }
 
                 api.core.on.rendered(scope, function() {
                     rendered = true;
-                    if (sensor !== undefined) {
-                        sensor.detach();
-                    }
+                    detach(sensors);
                     if (scope.enabled) {
                         ElementQueries.update();
-                        sensor = buildSensor();
+                        sensors = buildSensors();
                     }
                 });
 
                 scope.$watch('enabled', function(newValue) {
                     if (rendered) {
-                        if (newValue && sensor === undefined) {
+                        if (newValue) {
                             ElementQueries.update();
-                            sensor = buildSensor();
-                        } else if (!newValue && sensor !== undefined) {
-                            sensor.detach();
-                            sensor = undefined;
+                            sensors = buildSensors();
+                        } else if (!newValue) {
+                            detach(sensors);
+                            sensors = [];
                         }
                     }
                 });
@@ -2049,6 +2084,10 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                     var dependency = self.manager.addDependency(sourceEndpoint.$task, connectionModel);
                     info.connection.$dependency = dependency;
                     dependency.connection = info.connection;
+                    dependency.connection.setParameter('from', sourceEndpoint.$task);
+                    dependency.connection.setParameter('to', targetEndpoint.$task);
+                    dependency.connection.canvas.setAttribute('data-fromId', sourceEndpoint.$task.model.id);
+                    dependency.connection.canvas.setAttribute('data-toId', targetEndpoint.$task.model.id);
 
                     self.manager.api.dependencies.raise.add(dependency);
 
@@ -2084,6 +2123,10 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                     var dependency = self.manager.addDependency(sourceEndpoint.$task, connectionModel);
                     info.connection.$dependency = dependency;
                     dependency.connection = info.connection;
+                    dependency.connection.setParameter('from', sourceEndpoint.$task);
+                    dependency.connection.setParameter('to', targetEndpoint.$task);
+                    dependency.connection.canvas.setAttribute('data-fromId', sourceEndpoint.$task.model.id);
+                    dependency.connection.canvas.setAttribute('data-toId', targetEndpoint.$task.model.id);
 
                     self.manager.api.dependencies.raise.change(dependency, oldDependency);
                 }
@@ -2510,8 +2553,15 @@ Github: https://github.com/angular-gantt/angular-gantt.git
 
                     var connection = self.plumb.connect({
                         source: sourceEndpoint,
-                        target: targetEndpoint
+                        target: targetEndpoint,
+                        parameters: {
+                            from: fromTask,
+                            to: toTask
+                        }
+                        //cssClass: 'gantt-endpoint start-endpoint target-endpoint connect-' + fromTask.model.id + '-' + toTask.model.id,
                     }, model.connectParameters);
+                    connection.canvas.setAttribute('data-fromId', fromTask.model.id);
+                    connection.canvas.setAttribute('data-toId', toTask.model.id);
                     return connection;
                 }
             };
@@ -3019,10 +3069,13 @@ Github: https://github.com/angular-gantt/angular-gantt.git
             $scope.getLabelsCss = function() {
                 var css = {};
 
-                if ($scope.maxHeight) {
-                    var bodyScrollBarHeight = $scope.gantt.scroll.isHScrollbarVisible() ? hScrollBarHeight : 0;
-                    css['max-height'] = $scope.maxHeight - bodyScrollBarHeight - $scope.gantt.header.getHeight() + 'px';
+                var maxHeight = $scope.maxHeight;
+                if (!maxHeight) {
+                    maxHeight = $scope.gantt.getContainerHeight();
                 }
+
+                var bodyScrollBarHeight = $scope.gantt.scroll.isHScrollbarVisible() ? hScrollBarHeight : 0;
+                css['max-height'] = maxHeight - bodyScrollBarHeight - $scope.gantt.header.getHeight() + 'px';
 
                 return css;
             };
@@ -3387,10 +3440,13 @@ Github: https://github.com/angular-gantt/angular-gantt.git
             $scope.getMaxHeightCss = function() {
                 var css = {};
 
-                if ($scope.maxHeight) {
-                    var bodyScrollBarHeight = $scope.gantt.scroll.isHScrollbarVisible() ? hScrollBarHeight : 0;
-                    css['max-height'] = $scope.maxHeight - bodyScrollBarHeight - $scope.gantt.header.getHeight() + 'px';
+                var maxHeight = $scope.maxHeight;
+                if (!maxHeight) {
+                    maxHeight = $scope.gantt.getContainerHeight();
                 }
+
+                var bodyScrollBarHeight = $scope.gantt.scroll.isHScrollbarVisible() ? hScrollBarHeight : 0;
+                css['max-height'] = maxHeight - bodyScrollBarHeight - $scope.gantt.header.getHeight() + 'px';
 
                 return css;
             };
@@ -4000,10 +4056,13 @@ Github: https://github.com/angular-gantt/angular-gantt.git
             $scope.getLabelsCss = function() {
                 var css = {};
 
-                if ($scope.maxHeight) {
-                    var bodyScrollBarHeight = $scope.gantt.scroll.isHScrollbarVisible() ? hScrollBarHeight : 0;
-                    css['max-height'] = $scope.maxHeight - bodyScrollBarHeight - $scope.gantt.header.getHeight() + 'px';
+                var maxHeight = $scope.maxHeight;
+                if (!maxHeight) {
+                    maxHeight = $scope.gantt.getContainerHeight();
                 }
+
+                var bodyScrollBarHeight = $scope.gantt.scroll.isHScrollbarVisible() ? hScrollBarHeight : 0;
+                css['max-height'] = maxHeight - bodyScrollBarHeight - $scope.gantt.header.getHeight() + 'px';
 
                 return css;
             };

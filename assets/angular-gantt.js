@@ -1,5 +1,5 @@
 /*
-Project: angular-gantt v1.3.1 - Gantt chart component for AngularJS
+Project: angular-gantt v1.3.2 - Gantt chart component for AngularJS
 Authors: Marco Schweighauser, Rémi Alvergnat
 License: MIT
 Homepage: https://www.angular-gantt.com
@@ -1831,8 +1831,8 @@ Github: https://github.com/angular-gantt/angular-gantt.git
             this.gantt.currentDateManager.setCurrentDate(currentDateValue);
         };
 
-        var defaultHeadersFormats = {'year': 'YYYY', 'quarter': '[Q]Q YYYY', month: 'MMMM YYYY', week: 'w', day: 'D', hour: 'H', minute:'HH:mm'};
-        var defaultDayHeadersFormats = {day: 'LL', hour: 'H', minute:'HH:mm'};
+        var defaultHeadersFormats = {year: 'YYYY', quarter: '[Q]Q YYYY', month: 'MMMM YYYY', week: 'w', day: 'D', hour: 'H', minute:'H:mm', second:'H:mm:ss', millisecond: 'H:mm:ss:SSS'};
+        var defaultDayHeadersFormats = {day: 'LL', hour: 'H', minute:'H:mm', second:'H:mm:ss', millisecond: 'H:mm:ss:SSS'};
         var defaultYearHeadersFormats = {'year': 'YYYY', 'quarter': '[Q]Q', month: 'MMMM'};
 
         ColumnsManager.prototype.getHeaderFormat = function(unit) {
@@ -1881,7 +1881,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
             if (scale === undefined) {
                 scale = header;
             }
-            if (['second', 'minute', 'hour', 'day', 'week', 'month', 'quarter', 'year'].indexOf(scale) === -1) {
+            if (['millisecond', 'second', 'minute', 'hour', 'day', 'week', 'month', 'quarter', 'year'].indexOf(scale) === -1) {
                 scale = 'day';
             }
             return scale;
@@ -1942,7 +1942,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
 
                     var endDate = moment.min(moment(currentDate).add(viewScaleValue, viewScaleUnit), maximumDate);
 
-                    var column = columnsManager.getColumnByDate(endDate, true);
+                    var column = columnsManager.getColumnByDate(endDate);
 
                     var left = column.getPositionByDate(endDate);
 
@@ -2001,11 +2001,14 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                 if (['hour'].indexOf(viewScaleUnit) > -1) {
                     headerNames.push('day');
                 }
-                if (['minute', 'second'].indexOf(viewScaleUnit) > -1) {
+                if (['minute', 'second', 'millisecond'].indexOf(viewScaleUnit) > -1) {
                     headerNames.push('hour');
                 }
-                if (['second'].indexOf(viewScaleUnit) > -1) {
+                if (['second', 'millisecond'].indexOf(viewScaleUnit) > -1) {
                     headerNames.push('minute');
+                }
+                if (['millisecond'].indexOf(viewScaleUnit) > -1) {
+                    headerNames.push('second');
                 }
                 headerNames.push(viewScale);
             } else {
@@ -2407,6 +2410,18 @@ Github: https://github.com/angular-gantt/angular-gantt.git
 
             Gantt.prototype.getWidth = function() {
                 return this.$scope.ganttElementWidth;
+            };
+
+            Gantt.prototype.getHeight = function() {
+                return this.$scope.ganttElementHeight;
+            };
+
+            Gantt.prototype.getContainerWidth = function() {
+                return this.$scope.ganttContainerWidth;
+            };
+
+            Gantt.prototype.getContainerHeight = function() {
+                return this.$scope.ganttContainerHeight;
             };
 
             Gantt.prototype.initialized = function() {
@@ -4454,6 +4469,10 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                 var css = {};
 
                 var maxHeight = $scope.gantt.options.value('maxHeight');
+                if (!maxHeight) {
+                    maxHeight = $scope.gantt.getContainerHeight();
+                }
+
                 if (maxHeight > 0) {
                     css['max-height'] = maxHeight - $scope.gantt.header.getHeight() + 'px';
                     css['overflow-y'] = 'auto';
@@ -4578,6 +4597,86 @@ Github: https://github.com/angular-gantt/angular-gantt.git
 }());
 
 
+(function() {
+    'use strict';
+    angular.module('gantt').directive('ganttContainerHeightListener', [function() {
+        return {
+            restrict: 'A',
+            controller: ['$scope', '$element', '$attrs', function($scope, $element, $attrs) {
+                var scopeVariable = $attrs.ganttContainerHeightListener;
+                if (scopeVariable === '') {
+                    scopeVariable = 'ganttContainerHeight';
+                }
+
+                var effectiveScope = $scope;
+
+                while (scopeVariable.indexOf('$parent.') === 0) {
+                    scopeVariable = scopeVariable.substring('$parent.'.length);
+                    effectiveScope = effectiveScope.$parent;
+                }
+
+                effectiveScope.$watch(function() {
+                    var el = $element[0].parentElement ? $element[0].parentElement.parentElement : undefined;
+                    if (el) {
+                        var height = el.offsetHeight;
+
+                        var style = getComputedStyle(el);
+                        height = height - parseInt(style.marginTop) - parseInt(style.marginBottom);
+
+                        return height;
+                    }
+                    return 0;
+                }, function(newValue) {
+                    if (newValue > 0) {
+                        effectiveScope[scopeVariable] = newValue;
+                    }
+                });
+            }]
+        };
+    }]);
+}());
+
+
+(function() {
+    'use strict';
+    angular.module('gantt').directive('ganttContainerWidthListener', [function() {
+        return {
+            restrict: 'A',
+            controller: ['$scope', '$element', '$attrs', function($scope, $element, $attrs) {
+                var scopeVariable = $attrs.ganttContainerWidthListener;
+                if (scopeVariable === '') {
+                    scopeVariable = 'ganttContainerWidth';
+                }
+
+                var effectiveScope = $scope;
+
+                while (scopeVariable.indexOf('$parent.') === 0) {
+                    scopeVariable = scopeVariable.substring('$parent.'.length);
+                    effectiveScope = effectiveScope.$parent;
+                }
+
+                effectiveScope.$watch(function() {
+                    var el = $element[0].parentElement ? $element[0].parentElement.parentElement : undefined;
+                    if (el) {
+                        var width = el.offsetWidth;
+
+                        var style = getComputedStyle(el);
+                        width = width - parseInt(style.marginLeft) - parseInt(style.marginRight);
+
+                        return width;
+                    }
+                    return 0;
+                }, function(newValue) {
+                    if (newValue > 0) {
+                        effectiveScope[scopeVariable] = newValue;
+                    }
+                });
+            }]
+        };
+    }]);
+}());
+
+
 (function(){
     'use strict';
     angular.module('gantt').directive('ganttElementHeightListener', [function() {
@@ -4589,6 +4688,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                     scopeVariable = 'ganttElementHeight';
                 }
 
+                var el = $element[0];
                 var effectiveScope = $scope;
 
                 while(scopeVariable.indexOf('$parent.') === 0) {
@@ -4597,7 +4697,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                 }
 
                 effectiveScope.$watch(function() {
-                    return $element[0].offsetHeight;
+                    return el.clientHeight;
                 }, function(newValue) {
                     if (newValue > 0) {
                         effectiveScope[scopeVariable] = newValue;
@@ -4620,6 +4720,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                     scopeVariable = 'ganttElementWidth';
                 }
 
+                var el = $element[0];
                 var effectiveScope = $scope;
 
                 while(scopeVariable.indexOf('$parent.') === 0) {
@@ -4628,7 +4729,7 @@ Github: https://github.com/angular-gantt/angular-gantt.git
                 }
 
                 effectiveScope.$watch(function() {
-                    return $element[0].offsetWidth;
+                    return el.clientWidth;
                 }, function(newValue) {
                     if (newValue > 0) {
                         effectiveScope[scopeVariable] = newValue;
@@ -4851,10 +4952,13 @@ Github: https://github.com/angular-gantt/angular-gantt.git
             $scope.getMaxHeightCss = function() {
                 var css = {};
 
-                if ($scope.maxHeight) {
-                    var bodyScrollBarHeight = $scope.gantt.scroll.isHScrollbarVisible() ? hScrollBarHeight : 0;
-                    css['max-height'] = $scope.maxHeight - bodyScrollBarHeight - $scope.gantt.header.getHeight() + 'px';
+                var maxHeight = $scope.maxHeight;
+                if (!maxHeight) {
+                    maxHeight = $scope.gantt.getContainerHeight();
                 }
+
+                var bodyScrollBarHeight = $scope.gantt.scroll.isHScrollbarVisible() ? hScrollBarHeight : 0;
+                css['max-height'] = maxHeight - bodyScrollBarHeight - $scope.gantt.header.getHeight() + 'px';
 
                 return css;
             };
@@ -4866,8 +4970,25 @@ Github: https://github.com/angular-gantt/angular-gantt.git
 
 (function(){
     'use strict';
-    angular.module('gantt').directive('ganttSideContent', ['GanttDirectiveBuilder', function(Builder) {
+    angular.module('gantt').directive('ganttSideContent', ['GanttDirectiveBuilder', 'ganttLayout', function(Builder, layout) {
         var builder = new Builder('ganttSideContent');
+        builder.controller = function($scope) {
+            var hScrollBarHeight = layout.getScrollBarHeight();
+
+            $scope.getSideCss = function() {
+                var css = {};
+
+                var maxHeight = $scope.maxHeight;
+                if (!maxHeight) {
+                    maxHeight = $scope.gantt.getContainerHeight();
+                }
+
+                var bodyScrollBarHeight = $scope.gantt.scroll.isHScrollbarVisible() ? hScrollBarHeight : 0;
+                css['max-height'] = maxHeight - bodyScrollBarHeight + 'px';
+
+                return css;
+            };
+        };
         return builder.build();
     }]);
 }());
@@ -5357,7 +5478,11 @@ Github: https://github.com/angular-gantt/angular-gantt.git
 
 angular.module('gantt.templates', []).run(['$templateCache', function ($templateCache) {
     $templateCache.put('template/gantt.tmpl.html',
-        '<div class="gantt unselectable" ng-cloak gantt-scroll-manager gantt-element-width-listener="ganttElementWidth">\n' +
+        '<div class="gantt unselectable" ng-cloak gantt-scroll-manager\n' +
+        '     gantt-container-height-listener="ganttContainerHeight"\n' +
+        '     gantt-container-width-listener="ganttContainerWidth"\n' +
+        '     gantt-element-height-listener="ganttElementHeight"\n' +
+        '     gantt-element-width-listener="ganttElementWidth">\n' +
         '    <gantt-side>\n' +
         '        <gantt-side-background>\n' +
         '        </gantt-side-background>\n' +
@@ -5429,7 +5554,7 @@ angular.module('gantt.templates', []).run(['$templateCache', function ($template
         '\n' +
         '    <!-- Side content template-->\n' +
         '    <script type="text/ng-template" id="template/ganttSideContent.tmpl.html">\n' +
-        '        <div class="gantt-side-content">\n' +
+        '        <div class="gantt-side-content" ng-style="getSideCss()">\n' +
         '        </div>\n' +
         '    </script>\n' +
         '\n' +
